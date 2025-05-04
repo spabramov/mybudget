@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use ratatui::{
     style::palette::tailwind,
     widgets::{Block, Borders, ScrollbarState, StatefulWidget, TableState},
@@ -21,15 +19,17 @@ const INSTRUCTIONS_TEXT: &str = " ↑ ↓ to select row | ← → to select colu
 
 #[derive(Debug, Default)]
 pub struct TransactionsTableState {
-    pub table_state: TableState,
-    pub scroll_state: ScrollbarState,
-    items: Rc<Vec<Transaction>>,
+    table_state: TableState,
+    scroll_state: ScrollbarState,
+    size: usize,
 }
 
 #[derive(Debug)]
-pub struct TransactionsTable;
+pub struct TransactionsTable<'a> {
+    items: &'a [Transaction],
+}
 
-impl StatefulWidget for TransactionsTable {
+impl StatefulWidget for TransactionsTable<'_> {
     type State = TransactionsTableState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut TransactionsTableState) {
@@ -38,14 +38,18 @@ impl StatefulWidget for TransactionsTable {
     }
 }
 
-impl TransactionsTable {
+impl<'a> TransactionsTable<'a> {
+    pub fn new(items: &'a [Transaction]) -> Self {
+        Self { items }
+    }
+
     fn render_table(&self, area: Rect, buf: &mut Buffer, state: &mut TransactionsTableState) {
         let header_style = Style::default().add_modifier(Modifier::REVERSED);
         let selected_cell_style = Style::default().bg(tailwind::GRAY.c600);
 
         let header = get_header(TABLE_HEADER).style(header_style).height(1);
 
-        let rows = state.items.iter().enumerate().map(|(i, data)| {
+        let rows = self.items.iter().enumerate().map(|(i, data)| {
             let color = match i % 2 {
                 0 => Color::default(),
                 _ => tailwind::GRAY.c800,
@@ -80,28 +84,30 @@ impl TransactionsTable {
     }
 
     fn render_scrollbar(&self, area: Rect, buf: &mut Buffer, state: &mut TransactionsTableState) {
-        StatefulWidget::render(
-            Scrollbar::default()
-                .orientation(ScrollbarOrientation::VerticalRight)
-                .track_symbol(None)
-                .begin_symbol(None)
-                .end_symbol(None),
-            area.inner(Margin {
-                vertical: 1,
-                horizontal: 0,
-            }),
-            buf,
-            &mut state.scroll_state,
-        );
+        if area.height as usize <= state.size * ROW_HEIGHT as usize {
+            StatefulWidget::render(
+                Scrollbar::default()
+                    .orientation(ScrollbarOrientation::VerticalRight)
+                    .track_symbol(None)
+                    .begin_symbol(None)
+                    .end_symbol(None),
+                area.inner(Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                buf,
+                &mut state.scroll_state,
+            );
+        }
     }
 }
 
 impl TransactionsTableState {
-    pub fn new(data: &Rc<Vec<Transaction>>) -> Self {
+    pub fn new(size: usize) -> Self {
         Self {
             table_state: TableState::default().with_selected(0),
-            scroll_state: ScrollbarState::new((data.len() - 1) * ROW_HEIGHT as usize),
-            items: data.clone(),
+            scroll_state: ScrollbarState::new(size),
+            size,
         }
     }
 
@@ -111,11 +117,11 @@ impl TransactionsTableState {
 
     pub fn next_row(&mut self) {
         let i = match self.table_state.selected() {
-            Some(i) if i < self.items.len() => i + 1,
+            Some(i) if i < self.size => i + 1,
             _ => 0,
         };
         self.table_state.select(Some(i));
-        self.scroll_state = self.scroll_state.position(i * ROW_HEIGHT as usize);
+        self.scroll_state = self.scroll_state.position(i);
     }
 
     pub fn previous_row(&mut self) {
@@ -124,7 +130,7 @@ impl TransactionsTableState {
             _ => 0,
         };
         self.table_state.select(Some(i));
-        self.scroll_state = self.scroll_state.position(i * ROW_HEIGHT as usize);
+        self.scroll_state = self.scroll_state.position(i);
     }
 
     pub fn next_column(&mut self) {
