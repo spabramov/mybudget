@@ -3,6 +3,10 @@ pub enum AppEvent {
     Resize,
     Accept,
     Cancel,
+    Up,
+    Down,
+    Rigth,
+    Left,
     KeyEvent(char),
 }
 

@@ -33,12 +33,6 @@ impl StatefulWidget for TransactionsTable {
     type State = TransactionsTableState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut TransactionsTableState) {
-        let layout = Layout::new(
-            Direction::Horizontal,
-            [Constraint::Fill(1), Constraint::Length(1)],
-        )
-        .split(area);
-
         self.render_table(area, buf, state);
         self.render_scrollbar(area, buf, state);
     }

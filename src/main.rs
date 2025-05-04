@@ -38,6 +38,11 @@ fn handle_input(tx: mpsc::Sender<AppEvent>) -> io::Result<()> {
                     KeyCode::Char(ch) => Some(AppEvent::KeyEvent(ch)),
                     KeyCode::Enter => Some(AppEvent::Accept),
                     KeyCode::Esc => Some(AppEvent::Cancel),
+                    KeyCode::Up => Some(AppEvent::Up),
+                    KeyCode::Down => Some(AppEvent::Down),
+                    KeyCode::Right => Some(AppEvent::Rigth),
+                    KeyCode::Left => Some(AppEvent::Left),
+
                     _ => None,
                 }
             }

@@ -1,4 +1,3 @@
-use std::fmt::format;
 use std::rc::Rc;
 
 use ratatui::buffer::Buffer;
@@ -32,10 +31,10 @@ impl Screen for AccountScreen {
 
     fn handle_event(&mut self, event: &AppEvent) -> bool {
         match event {
-            AppEvent::KeyEvent('j') => self.table_state.next_row(),
-            AppEvent::KeyEvent('k') => self.table_state.previous_row(),
-            AppEvent::KeyEvent('l') => self.table_state.next_column(),
-            AppEvent::KeyEvent('h') => self.table_state.previous_column(),
+            AppEvent::KeyEvent('j') | AppEvent::Down => self.table_state.next_row(),
+            AppEvent::KeyEvent('k') | AppEvent::Up => self.table_state.previous_row(),
+            AppEvent::KeyEvent('l') | AppEvent::Rigth => self.table_state.next_column(),
+            AppEvent::KeyEvent('h') | AppEvent::Left => self.table_state.previous_column(),
             AppEvent::Cancel => self.table_state.deselect(),
             _ => return false,
         }
