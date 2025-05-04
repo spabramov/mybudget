@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::StatefulWidget;
@@ -46,8 +46,10 @@ fn gen_fake_trancations() -> Vec<Transaction> {
         .map(|num| {
             let datetime = Utc.with_ymd_and_hms(2000 + num, 2, 3, 4, 5, 6).unwrap();
             Transaction::new(
+                1,
                 datetime,
                 (num as f32) * 100.0,
+                &format!("Category #{}", num + 1),
                 &format!("Desctiption #{}", num + 1),
             )
         })

@@ -10,12 +10,12 @@ use ratatui::{
 };
 
 const TABLE_TITLE: &str = "Transactions";
-const TABLE_HEADER: [&str; 3] = [" Date", " Description", "Amount "];
+const TABLE_HEADER: [&str; 4] = [" Date", " Category", " Description", "Amount "];
 
 const ROW_HEIGHT: u16 = 3;
 const ROW_HIGHLIGHT_SYMBOL: &str = "\n > ";
 
-const INSTRUCTIONS_TEXT: &str = " ↑ ↓ to select row | ← → to select column ";
+const INSTRUCTIONS_TEXT: &str = " ← ↑ ↓ → to move selection ";
 
 #[derive(Debug, Default)]
 pub struct TransactionsTableState {
@@ -47,7 +47,7 @@ impl<'a> TransactionsTable<'a> {
         let header_style = Style::default().add_modifier(Modifier::REVERSED);
         let selected_cell_style = Style::default().bg(tailwind::GRAY.c600);
 
-        let header = get_header(TABLE_HEADER).style(header_style).height(1);
+        let header = get_header_row(TABLE_HEADER).style(header_style).height(1);
 
         let rows = self.items.iter().enumerate().map(|(i, data)| {
             let color = match i % 2 {
@@ -55,7 +55,7 @@ impl<'a> TransactionsTable<'a> {
                 _ => tailwind::GRAY.c800,
             };
 
-            get_row(data)
+            get_item_row(data)
                 .style(Style::default().bg(color))
                 .height(ROW_HEIGHT)
         });
@@ -64,7 +64,8 @@ impl<'a> TransactionsTable<'a> {
             rows,
             [
                 Constraint::Length(12),
-                Constraint::Percentage(90),
+                Constraint::Fill(1),
+                Constraint::Fill(9),
                 Constraint::Min(13),
             ],
         )
@@ -142,20 +143,22 @@ impl TransactionsTableState {
     }
 }
 
-fn get_header(header: [&str; 3]) -> Row {
+fn get_header_row(header: [&str; 4]) -> Row {
     Row::new(vec![
         Cell::from(Text::from(header[0])),
         Cell::from(Text::from(header[1])),
-        Cell::from(Text::from(header[2]).right_aligned()),
+        Cell::from(Text::from(header[2])),
+        Cell::from(Text::from(header[3]).right_aligned()),
     ])
 }
 
-fn get_row(data: &Transaction) -> Row {
+fn get_item_row(data: &Transaction) -> Row {
     Row::new(vec![
         Cell::from(Text::from(format!(
             "\n {} \n",
             data.timestamp.format("%Y-%m-%d")
         ))),
+        Cell::from(Text::from(format!("\n {} \n", data.category))),
         Cell::from(Text::from(format!("\n {} \n", data.description))),
         Cell::from(Text::from(format!("\n {:.2} \n", data.amount)).right_aligned()),
     ])
