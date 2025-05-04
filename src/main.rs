@@ -35,7 +35,7 @@ fn handle_input(tx: mpsc::Sender<AppEvent>) -> io::Result<()> {
                     KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                         Some(AppEvent::Quit)
                     }
-                    KeyCode::Char(ch) => Some(AppEvent::KeyEvent(ch)),
+                    KeyCode::Char(ch) => Some(AppEvent::Key(ch)),
                     KeyCode::Enter => Some(AppEvent::Accept),
                     KeyCode::Esc => Some(AppEvent::Cancel),
                     KeyCode::Up => Some(AppEvent::Up),

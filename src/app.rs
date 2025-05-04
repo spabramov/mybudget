@@ -68,8 +68,8 @@ impl App {
     fn handle_event(&mut self, app_event: AppEvent) {
         if self.state == AppState::Quitting {
             match app_event {
-                AppEvent::KeyEvent('y' | 'Y') | AppEvent::Accept => self.state = AppState::Exited,
-                AppEvent::KeyEvent('n' | 'N') | AppEvent::Cancel => self.state = AppState::Running,
+                AppEvent::Key('y' | 'Y') | AppEvent::Accept => self.state = AppState::Exited,
+                AppEvent::Key('n' | 'N') | AppEvent::Cancel => self.state = AppState::Running,
                 _ => {}
             }
         } else {
@@ -78,7 +78,7 @@ impl App {
             };
 
             if !consumed {
-                if let AppEvent::KeyEvent('q') = app_event {
+                if let AppEvent::Key('q') = app_event {
                     // default key handling
                     self.exit()
                 }

@@ -9,7 +9,7 @@ pub enum AppEvent {
     Down,
     Rigth,
     Left,
-    KeyEvent(char),
+    Key(char),
 }
 
 #[derive(Debug)]
