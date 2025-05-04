@@ -1,3 +1,4 @@
+use std::fmt::format;
 use std::rc::Rc;
 
 use ratatui::buffer::Buffer;
@@ -16,13 +17,7 @@ pub struct AccountScreen {
 
 impl AccountScreen {
     pub fn new() -> Self {
-        let items = Rc::new(vec![
-            Transaction::new("2020-01-01 00:01:00", -10.0, "aboba"),
-            Transaction::new("2022-01-01 11:22:33", 10.0, "biba"),
-            Transaction::new("1900-01-01 11:22:33", 100500.0, ""),
-        ]);
-
-        let table_state = TransactionsTableState::new(&items);
+        let table_state = TransactionsTableState::new(&Rc::new(gen_fake_trancations()));
 
         Self { table_state }
     }
@@ -46,4 +41,17 @@ impl Screen for AccountScreen {
         }
         true
     }
+}
+
+fn gen_fake_trancations() -> Vec<Transaction> {
+    (0..30)
+        .into_iter()
+        .map(|num| {
+            Transaction::new(
+                &format!("2{num:03}-01-01 00:01:00"),
+                (num as f32) * 100f32,
+                &format!("Desctiption #{}", num + 1),
+            )
+        })
+        .collect()
 }

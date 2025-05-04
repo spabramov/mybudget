@@ -18,13 +18,14 @@ enum AppState {
 }
 
 enum AppScreen {
-    Transactions,
+    Accounts,
 }
 
 pub struct App {
     state: AppState,
     screen: AppScreen,
     s_transactions: AccountScreen,
+    has_changes: bool,
     frames_count: u32,
 }
 
@@ -32,8 +33,9 @@ impl App {
     pub fn new() -> App {
         Self {
             state: AppState::Running,
-            screen: AppScreen::Transactions,
+            screen: AppScreen::Accounts,
             s_transactions: AccountScreen::new(),
+            has_changes: false,
             frames_count: 0,
         }
     }
@@ -47,13 +49,17 @@ impl App {
     }
 
     fn exit(&mut self) {
-        self.state = AppState::Quitting;
+        self.state = if self.has_changes {
+            AppState::Quitting
+        } else {
+            AppState::Exited
+        }
     }
 
     fn handle_events(&mut self, rx: &Input) -> Result<(), mpsc::RecvError> {
         match rx.recv()? {
             AppEvent::Quit => self.exit(),
-            AppEvent::Resize => {}
+            AppEvent::Resize => { /* redraw */ }
             app_event => self.handle_event(app_event),
         }
         Ok(())
@@ -68,7 +74,7 @@ impl App {
             }
         } else {
             let consumed = match self.screen {
-                AppScreen::Transactions => self.s_transactions.handle_event(&app_event),
+                AppScreen::Accounts => self.s_transactions.handle_event(&app_event),
             };
 
             if !consumed {
@@ -93,7 +99,7 @@ impl Widget for &mut App {
         Self: Sized,
     {
         match self.screen {
-            AppScreen::Transactions => self.s_transactions.render(area, buf),
+            AppScreen::Accounts => self.s_transactions.render(area, buf),
         }
 
         if self.state == AppState::Quitting {
@@ -105,6 +111,7 @@ impl Widget for &mut App {
         }
     }
 }
+
 fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
     let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
