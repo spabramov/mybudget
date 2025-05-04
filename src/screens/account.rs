@@ -1,3 +1,4 @@
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::StatefulWidget;
@@ -42,10 +43,10 @@ impl Screen for AccountScreen {
 
 fn gen_fake_trancations() -> Vec<Transaction> {
     (0..22)
-        .into_iter()
         .map(|num| {
+            let datetime = Utc.with_ymd_and_hms(2000 + num, 2, 3, 4, 5, 6).unwrap();
             Transaction::new(
-                &format!("2{num:03}-01-01 00:01:00"),
+                datetime,
                 (num as f32) * 100.0,
                 &format!("Desctiption #{}", num + 1),
             )

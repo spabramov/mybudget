@@ -13,7 +13,7 @@ const TABLE_TITLE: &str = "Transactions";
 const TABLE_HEADER: [&str; 3] = [" Date", " Description", "Amount "];
 
 const ROW_HEIGHT: u16 = 3;
-const ROW_HIGHLIGHT_SYMBOL: &str = "\n >";
+const ROW_HIGHLIGHT_SYMBOL: &str = "\n > ";
 
 const INSTRUCTIONS_TEXT: &str = " ↑ ↓ to select row | ← → to select column ";
 
@@ -63,9 +63,9 @@ impl<'a> TransactionsTable<'a> {
         let tb = Table::new(
             rows,
             [
-                Constraint::Length(21),
-                Constraint::Percentage(80),
-                Constraint::Min(5),
+                Constraint::Length(12),
+                Constraint::Percentage(90),
+                Constraint::Min(13),
             ],
         )
         .header(header)
@@ -152,7 +152,10 @@ fn get_header(header: [&str; 3]) -> Row {
 
 fn get_row(data: &Transaction) -> Row {
     Row::new(vec![
-        Cell::from(Text::from(format!("\n {} \n", data.timestamp))),
+        Cell::from(Text::from(format!(
+            "\n {} \n",
+            data.timestamp.format("%Y-%m-%d")
+        ))),
         Cell::from(Text::from(format!("\n {} \n", data.description))),
         Cell::from(Text::from(format!("\n {:.2} \n", data.amount)).right_aligned()),
     ])

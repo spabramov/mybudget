@@ -1,3 +1,5 @@
+use chrono::{DateTime, Local, Utc};
+
 pub enum AppEvent {
     Quit,
     Resize,
@@ -12,15 +14,15 @@ pub enum AppEvent {
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub timestamp: String,
+    pub timestamp: DateTime<Local>,
     pub amount: f32,
     pub description: String,
 }
 
 impl Transaction {
-    pub fn new(timestamp: &str, amount: f32, description: &str) -> Transaction {
+    pub fn new(timestamp: DateTime<Utc>, amount: f32, description: &str) -> Transaction {
         Self {
-            timestamp: String::from(timestamp),
+            timestamp: timestamp.into(),
             amount,
             description: String::from(description),
         }
