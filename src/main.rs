@@ -7,6 +7,7 @@ use types::AppEvent;
 
 mod app;
 mod screens;
+mod service;
 mod types;
 mod widgets;
 

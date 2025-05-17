@@ -1,12 +1,14 @@
 use std::sync::mpsc;
 
+use chrono::{TimeZone, Utc};
 use color_eyre::eyre;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::widgets::{Block, Clear, Widget};
 
 use crate::screens::account::AccountScreen;
 use crate::screens::Screen;
-use crate::types::AppEvent;
+use crate::service::BudgetService;
+use crate::types::{AppEvent, Transaction};
 
 type Input = mpsc::Receiver<AppEvent>;
 
@@ -27,16 +29,24 @@ pub struct App {
     s_transactions: AccountScreen,
     has_changes: bool,
     frames_count: u32,
+    service: BudgetService,
 }
 
 impl App {
     pub fn new() -> App {
+        let mut service = BudgetService::new("budget.db").expect("Failed to create budget service");
+
+        service
+            .put_transactions(&gen_fake_trancations())
+            .expect("Failed to insert fake data");
+
         Self {
             state: AppState::Running,
             screen: AppScreen::Accounts,
-            s_transactions: AccountScreen::new(),
+            s_transactions: AccountScreen::new(&service),
             has_changes: false,
             frames_count: 0,
+            service,
         }
     }
     pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal, rx: Input) -> eyre::Result<()> {
@@ -118,4 +128,24 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
+}
+
+fn gen_fake_trancations() -> Vec<Transaction> {
+    (0..22usize)
+        .map(|num| {
+            let datetime = Utc
+                .with_ymd_and_hms(2000 + num as i32, 2, 3, 4, 5, 6)
+                .unwrap();
+
+            Transaction {
+                transaction_id: num,
+                credit_acc_id: 1,
+                debit_acc_id: 1,
+                timestamp: datetime.into(),
+                amount: num * 100,
+                category: String::from(&format!("Category #{}", num + 1)),
+                description: String::from(&format!("Desctiption #{}", num + 1)),
+            }
+        })
+        .collect()
 }

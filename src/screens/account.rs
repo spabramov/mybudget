@@ -3,6 +3,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::StatefulWidget;
 
+use crate::service::BudgetService;
 use crate::types::{AppEvent, Transaction};
 use crate::widgets::transactions::{TransactionsTable, TransactionsTableState};
 
@@ -15,8 +16,10 @@ pub struct AccountScreen {
 }
 
 impl AccountScreen {
-    pub fn new() -> Self {
-        let items = gen_fake_trancations();
+    pub fn new(service: &BudgetService) -> Self {
+        let items = service
+            .get_transactions()
+            .expect("failed to read transations");
         let table_state = TransactionsTableState::new(items.len());
 
         Self { table_state, items }
@@ -39,19 +42,4 @@ impl Screen for AccountScreen {
         }
         true
     }
-}
-
-fn gen_fake_trancations() -> Vec<Transaction> {
-    (0..22)
-        .map(|num| {
-            let datetime = Utc.with_ymd_and_hms(2000 + num, 2, 3, 4, 5, 6).unwrap();
-            Transaction::new(
-                1,
-                datetime,
-                (num as f32) * 100.0,
-                &format!("Category #{}", num + 1),
-                &format!("Desctiption #{}", num + 1),
-            )
-        })
-        .collect()
 }

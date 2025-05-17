@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local};
 
 pub enum AppEvent {
     Quit,
@@ -12,29 +12,13 @@ pub enum AppEvent {
     Key(char),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Transaction {
-    pub account_id: usize,
+    pub transaction_id: usize,
+    pub credit_acc_id: u16,
+    pub debit_acc_id: u16,
     pub timestamp: DateTime<Local>,
     pub category: String,
-    pub amount: f32,
+    pub amount: usize,
     pub description: String,
-}
-
-impl Transaction {
-    pub fn new(
-        account_id: usize,
-        timestamp: DateTime<Utc>,
-        amount: f32,
-        category: &str,
-        description: &str,
-    ) -> Transaction {
-        Self {
-            account_id,
-            timestamp: timestamp.into(),
-            amount,
-            category: String::from(category),
-            description: String::from(description),
-        }
-    }
 }
