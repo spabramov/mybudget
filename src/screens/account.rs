@@ -1,4 +1,3 @@
-use chrono::{TimeZone, Utc};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::StatefulWidget;

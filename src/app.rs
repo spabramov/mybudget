@@ -131,18 +131,18 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
 }
 
 fn gen_fake_trancations() -> Vec<Transaction> {
-    (0..22usize)
+    (0..22i32)
         .map(|num| {
             let datetime = Utc
                 .with_ymd_and_hms(2000 + num as i32, 2, 3, 4, 5, 6)
                 .unwrap();
 
             Transaction {
-                transaction_id: num,
+                transaction_id: Some(num as isize),
                 credit_acc_id: 1,
                 debit_acc_id: 1,
                 timestamp: datetime.into(),
-                amount: num * 100,
+                amount: num as i64 * 100,
                 category: String::from(&format!("Category #{}", num + 1)),
                 description: String::from(&format!("Desctiption #{}", num + 1)),
             }
