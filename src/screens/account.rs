@@ -15,11 +15,23 @@ pub struct AccountScreen {
 }
 
 impl AccountScreen {
-    pub fn new(service: &BudgetService) -> Self {
-        let items = service.get_trns().expect("failed to read transations");
-        let table_state = TransactionsTableState::new(items.len());
+    pub fn new() -> Self {
+        let table_state = TransactionsTableState::new(0);
 
-        Self { table_state, items }
+        Self {
+            table_state,
+            items: vec![],
+        }
+    }
+
+    pub fn sync(&mut self, service: &mut BudgetService) {
+        self.items = match service.get_trns() {
+            Ok(trns) => trns,
+            Err(err) => panic!("Failed to sync transactions: {err:?}"),
+        };
+        let selected = self.table_state.selected();
+        self.table_state = TransactionsTableState::new(self.items.len());
+        self.table_state.select(selected);
     }
 }
 

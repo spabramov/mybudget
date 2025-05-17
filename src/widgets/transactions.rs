@@ -112,6 +112,14 @@ impl TransactionsTableState {
         }
     }
 
+    pub fn select(&mut self, index: Option<usize>) {
+        self.table_state.select(index);
+        self.scroll_state = self.scroll_state.position(index.unwrap_or(0));
+    }
+    pub fn selected(&self) -> Option<usize> {
+        self.table_state.selected()
+    }
+
     pub fn deselect(&mut self) {
         self.table_state.select_column(None);
     }

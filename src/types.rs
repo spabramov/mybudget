@@ -10,6 +10,7 @@ pub enum AppEvent {
     Rigth,
     Left,
     Key(char),
+    GenerateFakeData,
 }
 
 #[derive(Debug, PartialEq)]

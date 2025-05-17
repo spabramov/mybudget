@@ -1,6 +1,6 @@
 use std::sync::mpsc;
 
-use chrono::{TimeZone, Utc};
+use chrono::{Local, TimeZone};
 use color_eyre::eyre;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::widgets::{Block, Clear, Widget};
@@ -35,15 +35,13 @@ pub struct App {
 impl App {
     pub fn new() -> App {
         let mut service = BudgetService::new("budget.db").expect("Failed to create budget service");
-
-        service
-            .put_trns(&gen_fake_trancations())
-            .expect("Failed to insert fake data");
+        let mut s_transactions = AccountScreen::new();
+        s_transactions.sync(&mut service);
 
         Self {
             state: AppState::Running,
             screen: AppScreen::Accounts,
-            s_transactions: AccountScreen::new(&service),
+            s_transactions,
             has_changes: false,
             frames_count: 0,
             service,
@@ -88,9 +86,15 @@ impl App {
             };
 
             if !consumed {
-                if let AppEvent::Key('q') = app_event {
-                    // default key handling
-                    self.exit()
+                match app_event {
+                    AppEvent::Key('q') => self.exit(), // default key handling
+                    AppEvent::Key('g' | 'G') => {
+                        self.service
+                            .put_trns(&gen_fake_trancations(5))
+                            .expect("failed to insert fake data");
+                        self.s_transactions.sync(&mut self.service);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -130,16 +134,18 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     area
 }
 
-fn gen_fake_trancations() -> Vec<Transaction> {
-    (0..22i32)
+fn gen_fake_trancations(size: u32) -> Vec<Transaction> {
+    (0..size)
         .map(|num| {
-            let datetime = Utc.with_ymd_and_hms(2000 + num, 2, 3, 4, 5, 6).unwrap();
+            let timestamp = Local
+                .with_ymd_and_hms(2000 + num as i32, 2, 3, 4, 5, 6)
+                .unwrap();
 
             Transaction {
-                transaction_id: Some(num as isize),
+                transaction_id: None,
                 credit_acc_id: Some(1),
-                debit_acc_id: Some(1),
-                timestamp: datetime.into(),
+                debit_acc_id: Some(2),
+                timestamp,
                 amount: num as i64 * 100,
                 category: Some(String::from(&format!("Category #{}", num + 1))),
                 description: Some(String::from(&format!("Desctiption #{}", num + 1))),
