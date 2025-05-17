@@ -30,7 +30,7 @@ impl BudgetService {
     }
 
     pub fn get_transactions(&self) -> Result<Vec<Transaction>> {
-        let mut stmt = self.connection.prepare(
+        let mut stmt = self.connection.prepare_cached(
             "SELECT 
                 transaction_id, timestamp, credit_acc_id, debit_acc_id,
                 amount, category, description
@@ -51,9 +51,19 @@ impl BudgetService {
 
         tr_iter.collect()
     }
+    pub fn delete_transactions(&mut self, items: &[isize]) -> Result<()> {
+        let mut delete = self
+            .connection
+            .prepare_cached("DELETE FROM fin_transaction WHERE transaction_id = ?1")?;
+
+        for id in items {
+            let _ = delete.execute(params![id])?;
+        }
+        Ok(())
+    }
 
     pub fn put_transaction(&mut self, item: &Transaction) -> Result<isize> {
-        let mut insert = self.connection.prepare(
+        let mut insert = self.connection.prepare_cached(
             "INSERT INTO fin_transaction (
                timestamp, credit_acc_id, debit_acc_id,
                amount, category, description
@@ -63,7 +73,7 @@ impl BudgetService {
             ",
         )?;
 
-        let mut update = self.connection.prepare(
+        let mut update = self.connection.prepare_cached(
             "UPDATE fin_transaction 
              SET 
                 timestamp     = ?2,
@@ -172,7 +182,7 @@ mod test {
 
     #[test]
     fn update_transaction() -> Result<()> {
-        let mut service = BudgetService::new(TEST_DB).unwrap();
+        let mut service = BudgetService::new(TEST_DB)?;
         let mut trn = random_trn();
 
         trn.transaction_id = Some(service.put_transaction(&trn)?);
@@ -180,6 +190,25 @@ mod test {
         let content = service.get_transactions()?;
         assert_eq!(content, vec![trn]);
 
+        Ok(())
+    }
+
+    #[test]
+    fn delete_transactions() -> Result<()> {
+        let mut service = BudgetService::new(TEST_DB)?;
+        let mut trn1 = random_trn();
+        let mut trn2 = random_trn();
+
+        trn1.transaction_id = Some(service.put_transaction(&trn1)?);
+        trn2.transaction_id = Some(service.put_transaction(&trn2)?);
+
+        dbg!(&trn1, &trn2);
+
+        assert!(service.get_transactions()?.len() == 2);
+
+        let _ = service.delete_transactions(&[trn1.transaction_id.unwrap()]);
+
+        assert_eq!(service.get_transactions(), Ok(vec![trn2]));
         Ok(())
     }
 }
