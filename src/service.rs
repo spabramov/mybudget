@@ -1,8 +1,21 @@
 use crate::types::Transaction;
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection};
+
+type Result<T, E = DBError> = core::result::Result<T, E>;
 
 pub struct BudgetService {
     connection: Connection,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum DBError {
+    SQLError(rusqlite::Error),
+}
+
+impl From<rusqlite::Error> for DBError {
+    fn from(value: rusqlite::Error) -> Self {
+        DBError::SQLError(value)
+    }
 }
 
 impl BudgetService {
@@ -15,21 +28,21 @@ impl BudgetService {
     }
 
     fn create_db(conn: &Connection) -> Result<usize> {
-        conn.execute(
+        Ok(conn.execute(
             "CREATE TABLE IF NOT EXISTS fin_transaction (
                 transaction_id  INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp       TEXT NOT NULL,
-                credit_acc_id   INTEGER NOT NULL,
-                debit_acc_id    INTEGER NOT NULL,
-                amount          INTEGER NOT NULL,
-                category        TEXT,
-                description     TEXT
+                timestamp       TEXT    NULL,
+                credit_acc_id   INTEGER NULL,
+                debit_acc_id    INTEGER NULL,
+                amount          INTEGER NULL,
+                category        TEXT    NULL,
+                description     TEXT    NULL
             ) STRICT",
             [],
-        )
+        )?)
     }
 
-    pub fn get_transactions(&self) -> Result<Vec<Transaction>> {
+    pub fn get_trns(&self) -> Result<Vec<Transaction>> {
         let mut stmt = self.connection.prepare_cached(
             "SELECT 
                 transaction_id, timestamp, credit_acc_id, debit_acc_id,
@@ -49,9 +62,9 @@ impl BudgetService {
             })
         })?;
 
-        tr_iter.collect()
+        Ok(tr_iter.collect::<Result<Vec<Transaction>, rusqlite::Error>>()?)
     }
-    pub fn delete_transactions(&mut self, items: &[isize]) -> Result<()> {
+    pub fn del_trns(&mut self, items: &[isize]) -> Result<()> {
         let mut delete = self
             .connection
             .prepare_cached("DELETE FROM fin_transaction WHERE transaction_id = ?1")?;
@@ -62,33 +75,23 @@ impl BudgetService {
         Ok(())
     }
 
-    pub fn put_transaction(&mut self, item: &Transaction) -> Result<isize> {
-        let mut insert = self.connection.prepare_cached(
-            "INSERT INTO fin_transaction (
-               timestamp, credit_acc_id, debit_acc_id,
-               amount, category, description
-            )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-            RETURNING transaction_id
-            ",
-        )?;
-
-        let mut update = self.connection.prepare_cached(
-            "UPDATE fin_transaction 
-             SET 
-                timestamp     = ?2,
-                credit_acc_id = ?3,
-                debit_acc_id  = ?4,
-                amount        = ?5,
-                category      = ?6,
-                description   = ?7
-            WHERE
-                transaction_id = ?1
-            ",
-        )?;
-
-        match item.transaction_id {
+    pub fn put_trn(&mut self, item: &Transaction) -> Result<isize> {
+        let trn_id = match item.transaction_id {
             Some(transaction_id) => {
+                let mut update = self.connection.prepare_cached(
+                    "UPDATE fin_transaction 
+                     SET 
+                        timestamp     = ?2,
+                        credit_acc_id = ?3,
+                        debit_acc_id  = ?4,
+                        amount        = ?5,
+                        category      = ?6,
+                        description   = ?7
+                    WHERE
+                        transaction_id = ?1
+                    ",
+                )?;
+
                 let _ = update.execute(params![
                     transaction_id,
                     item.timestamp,
@@ -98,25 +101,38 @@ impl BudgetService {
                     item.category,
                     item.description
                 ]);
-                Ok(transaction_id)
+                transaction_id
             }
-            None => insert.query_row(
-                params![
-                    item.timestamp,
-                    item.credit_acc_id,
-                    item.debit_acc_id,
-                    item.amount,
-                    item.category,
-                    item.description
-                ],
-                |row| row.get(0),
-            ),
-        }
+            None => {
+                let mut insert = self.connection.prepare_cached(
+                    "INSERT INTO fin_transaction (
+                       timestamp, credit_acc_id, debit_acc_id,
+                       amount, category, description
+                    )
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                    RETURNING transaction_id
+                    ",
+                )?;
+                insert.query_row(
+                    params![
+                        item.timestamp,
+                        item.credit_acc_id,
+                        item.debit_acc_id,
+                        item.amount,
+                        item.category,
+                        item.description
+                    ],
+                    |row| row.get(0),
+                )?
+            }
+        };
+
+        Ok(trn_id)
     }
 
-    pub fn put_transactions(&mut self, data: &[Transaction]) -> Result<()> {
+    pub fn put_trns(&mut self, data: &[Transaction]) -> Result<()> {
         for item in data {
-            let _ = self.put_transaction(item);
+            let _ = self.put_trn(item);
         }
         Ok(())
     }
@@ -147,12 +163,12 @@ mod test {
         let mut rng = rand::rng();
         Transaction {
             transaction_id: None,
-            credit_acc_id: rng.random_range(0..u8::MAX),
-            debit_acc_id: rng.random_range(0..u8::MAX),
+            credit_acc_id: Some(rng.random_range(0..u8::MAX)),
+            debit_acc_id: Some(rng.random_range(0..u8::MAX)),
             timestamp: Local::now() + Duration::days(rng.random_range(0..30)),
             amount: rng.random_range(i64::MIN..i64::MAX),
-            category: generate_random_string(10),
-            description: generate_random_string(10),
+            category: Some(generate_random_string(10)),
+            description: Some(generate_random_string(10)),
         }
     }
 
@@ -163,7 +179,7 @@ mod test {
     #[test]
     fn create_service() -> Result<()> {
         let service = BudgetService::new(TEST_DB)?;
-        let trans = service.get_transactions()?;
+        let trans = service.get_trns()?;
 
         assert_eq!(trans, vec![]);
         Ok(())
@@ -173,7 +189,7 @@ mod test {
     fn insert_transactions() -> Result<()> {
         let fake_data = fake_data();
         let mut service = BudgetService::new(TEST_DB)?;
-        if let Err(err) = service.put_transactions(&fake_data) {
+        if let Err(err) = service.put_trns(&fake_data) {
             println!("{err:?}");
         }
 
@@ -185,9 +201,9 @@ mod test {
         let mut service = BudgetService::new(TEST_DB)?;
         let mut trn = random_trn();
 
-        trn.transaction_id = Some(service.put_transaction(&trn)?);
+        trn.transaction_id = Some(service.put_trn(&trn)?);
 
-        let content = service.get_transactions()?;
+        let content = service.get_trns()?;
         assert_eq!(content, vec![trn]);
 
         Ok(())
@@ -199,16 +215,16 @@ mod test {
         let mut trn1 = random_trn();
         let mut trn2 = random_trn();
 
-        trn1.transaction_id = Some(service.put_transaction(&trn1)?);
-        trn2.transaction_id = Some(service.put_transaction(&trn2)?);
+        trn1.transaction_id = Some(service.put_trn(&trn1)?);
+        trn2.transaction_id = Some(service.put_trn(&trn2)?);
 
         dbg!(&trn1, &trn2);
 
-        assert!(service.get_transactions()?.len() == 2);
+        assert!(service.get_trns()?.len() == 2);
 
-        let _ = service.delete_transactions(&[trn1.transaction_id.unwrap()]);
+        let _ = service.del_trns(&[trn1.transaction_id.unwrap()]);
 
-        assert_eq!(service.get_transactions(), Ok(vec![trn2]));
+        assert_eq!(service.get_trns(), Ok(vec![trn2]));
         Ok(())
     }
 }

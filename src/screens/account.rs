@@ -16,9 +16,7 @@ pub struct AccountScreen {
 
 impl AccountScreen {
     pub fn new(service: &BudgetService) -> Self {
-        let items = service
-            .get_transactions()
-            .expect("failed to read transations");
+        let items = service.get_trns().expect("failed to read transations");
         let table_state = TransactionsTableState::new(items.len());
 
         Self { table_state, items }

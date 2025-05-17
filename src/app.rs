@@ -37,7 +37,7 @@ impl App {
         let mut service = BudgetService::new("budget.db").expect("Failed to create budget service");
 
         service
-            .put_transactions(&gen_fake_trancations())
+            .put_trns(&gen_fake_trancations())
             .expect("Failed to insert fake data");
 
         Self {
@@ -133,18 +133,16 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
 fn gen_fake_trancations() -> Vec<Transaction> {
     (0..22i32)
         .map(|num| {
-            let datetime = Utc
-                .with_ymd_and_hms(2000 + num as i32, 2, 3, 4, 5, 6)
-                .unwrap();
+            let datetime = Utc.with_ymd_and_hms(2000 + num, 2, 3, 4, 5, 6).unwrap();
 
             Transaction {
                 transaction_id: Some(num as isize),
-                credit_acc_id: 1,
-                debit_acc_id: 1,
+                credit_acc_id: Some(1),
+                debit_acc_id: Some(1),
                 timestamp: datetime.into(),
                 amount: num as i64 * 100,
-                category: String::from(&format!("Category #{}", num + 1)),
-                description: String::from(&format!("Desctiption #{}", num + 1)),
+                category: Some(String::from(&format!("Category #{}", num + 1))),
+                description: Some(String::from(&format!("Desctiption #{}", num + 1))),
             }
         })
         .collect()

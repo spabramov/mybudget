@@ -153,13 +153,18 @@ fn get_header_row(header: [&str; 4]) -> Row {
 }
 
 fn get_item_row(data: &Transaction) -> Row {
+    let category: &str = data.category.as_ref().map_or("", |x| x);
+    let description: &str = data.description.as_ref().map_or("", |x| x);
+    let amount_whole = data.amount / 100;
+    let amount_frac = data.amount % 100;
+
     Row::new(vec![
         Cell::from(Text::from(format!(
             "\n {} \n",
             data.timestamp.format("%Y-%m-%d")
         ))),
-        Cell::from(Text::from(format!("\n {} \n", data.category))),
-        Cell::from(Text::from(format!("\n {} \n", data.description))),
-        Cell::from(Text::from(format!("\n {:.2} \n", data.amount)).right_aligned()),
+        Cell::from(Text::from(format!("\n {} \n", category))),
+        Cell::from(Text::from(format!("\n {} \n", description))),
+        Cell::from(Text::from(format!("\n {amount_whole}.{amount_frac:02} \n")).right_aligned()),
     ])
 }
