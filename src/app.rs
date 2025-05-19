@@ -20,33 +20,27 @@ enum AppState {
     Running,
 }
 
-enum AppScreen {
-    Accounts,
-}
-
 pub struct App {
     state: AppState,
-    screen: AppScreen,
-    s_transactions: AccountScreen,
+    screen: Box<dyn Screen>,
     has_changes: bool,
     frames_count: u32,
     service: BudgetService,
 }
 
 impl App {
-    pub fn new() -> App {
-        let mut service = BudgetService::new("budget.db").expect("Failed to create budget service");
+    pub fn new() -> eyre::Result<Self> {
+        let mut service = BudgetService::new("budget.db")?;
         let mut s_transactions = AccountScreen::new();
-        s_transactions.sync(&mut service);
+        s_transactions.sync(&mut service)?;
 
-        Self {
+        Ok(Self {
             state: AppState::Running,
-            screen: AppScreen::Accounts,
-            s_transactions,
+            screen: Box::from(s_transactions),
             has_changes: false,
             frames_count: 0,
             service,
-        }
+        })
     }
     pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal, rx: Input) -> eyre::Result<()> {
         while self.state != AppState::Exited {
@@ -74,38 +68,36 @@ impl App {
     }
 
     fn handle_event(&mut self, term_event: Event) {
-        if let Event::Key(key_event) = term_event {
-            if self.state == AppState::Quitting {
-                match key_event.code {
-                    KeyCode::Char('y' | 'Y') | KeyCode::Enter => self.state = AppState::Exited,
-                    KeyCode::Char('n' | 'N') | KeyCode::Esc => self.state = AppState::Running,
-                    _ => {}
-                }
-            } else {
-                let consumed = match self.screen {
-                    AppScreen::Accounts => self.s_transactions.handle_event(&term_event),
-                };
+        if self.state == AppState::Quitting {
+            self.exit_popup(term_event);
+        } else if let Event::Key(key_event) = term_event {
+            let consumed = self.screen.handle_event(&term_event);
 
-                if !consumed {
-                    match key_event.code {
-                        KeyCode::Char('q') => self.exit(), // default key handling
-                        KeyCode::Char('g' | 'G') => {
-                            self.service
-                                .put_trns(&gen_fake_trancations(5))
-                                .expect("failed to insert fake data");
-                            self.s_transactions.sync(&mut self.service);
-                        }
-                        _ => {}
+            if !consumed {
+                match key_event.code {
+                    KeyCode::Char('q') => self.exit(), // default key handling
+                    KeyCode::Char('g' | 'G') => {
+                        self.service
+                            .put_trns(&gen_fake_trancations(5))
+                            .expect("failed to insert fake data");
+                        self.screen
+                            .sync(&mut self.service)
+                            .expect("Failed to sync data");
                     }
+                    _ => {}
                 }
             }
         }
     }
-}
 
-impl Default for App {
-    fn default() -> Self {
-        Self::new()
+    fn exit_popup(&mut self, term_event: Event) {
+        if let Event::Key(key_event) = term_event {
+            match key_event.code {
+                KeyCode::Char('y' | 'Y') | KeyCode::Enter => self.state = AppState::Exited,
+                KeyCode::Char('n' | 'N') | KeyCode::Esc => self.state = AppState::Running,
+                _ => {}
+            }
+        }
     }
 }
 
@@ -114,9 +106,7 @@ impl Widget for &mut App {
     where
         Self: Sized,
     {
-        match self.screen {
-            AppScreen::Accounts => self.s_transactions.render(area, buf),
-        }
+        self.screen.render(area, buf);
 
         if self.state == AppState::Quitting {
             let block = Block::bordered().title("Quit?").title_bottom("y / n");

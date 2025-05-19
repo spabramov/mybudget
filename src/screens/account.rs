@@ -1,3 +1,4 @@
+use color_eyre::eyre;
 use crossterm::event::{Event, KeyCode};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -24,16 +25,6 @@ impl AccountScreen {
             items: vec![],
         }
     }
-
-    pub fn sync(&mut self, service: &mut BudgetService) {
-        self.items = match service.get_trns() {
-            Ok(trns) => trns,
-            Err(err) => panic!("Failed to sync transactions: {err:?}"),
-        };
-        let selected = self.table_state.selected();
-        self.table_state = TransactionsTableState::new(self.items.len());
-        self.table_state.select(selected);
-    }
 }
 
 impl Screen for AccountScreen {
@@ -53,5 +44,14 @@ impl Screen for AccountScreen {
             }
         }
         true
+    }
+
+    fn sync(&mut self, service: &mut BudgetService) -> eyre::Result<()> {
+        self.items = service.get_trns()?;
+
+        let selected = self.table_state.selected();
+        self.table_state = TransactionsTableState::new(self.items.len());
+        self.table_state.select(selected);
+        Ok(())
     }
 }

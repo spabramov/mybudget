@@ -18,7 +18,7 @@ fn main() -> eyre::Result<()> {
     thread::spawn(move || -> eyre::Result<()> { handle_input(tx) });
 
     let mut terminal = ratatui::init();
-    let result = App::new().run(&mut terminal, rx);
+    let result = App::new()?.run(&mut terminal, rx);
 
     ratatui::restore();
     result

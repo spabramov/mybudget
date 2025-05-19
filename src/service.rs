@@ -1,7 +1,6 @@
 use crate::types::Transaction;
+use color_eyre::eyre::Result;
 use rusqlite::{params, Connection};
-
-type Result<T, E = DBError> = core::result::Result<T, E>;
 
 pub struct BudgetService {
     connection: Connection,
