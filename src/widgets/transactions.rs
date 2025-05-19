@@ -89,6 +89,7 @@ impl<'a> TransactionsTable<'a> {
             StatefulWidget::render(
                 Scrollbar::default()
                     .orientation(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("▐")
                     .track_symbol(None)
                     .begin_symbol(None)
                     .end_symbol(None),

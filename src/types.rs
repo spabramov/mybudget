@@ -2,15 +2,7 @@ use chrono::{DateTime, Local};
 
 pub enum AppEvent {
     Quit,
-    Resize,
-    Accept,
-    Cancel,
-    Up,
-    Down,
-    Rigth,
-    Left,
-    Key(char),
-    GenerateFakeData,
+    TermEvent(crossterm::event::Event),
 }
 
 #[derive(Debug, PartialEq)]

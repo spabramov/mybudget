@@ -1,7 +1,6 @@
 use app::App;
 use color_eyre::eyre;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use std::io;
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::{sync::mpsc, thread};
 use types::AppEvent;
 
@@ -16,45 +15,29 @@ fn main() -> eyre::Result<()> {
 
     let (tx, rx) = mpsc::channel();
 
-    thread::spawn(move || -> io::Result<()> { handle_input(tx) });
+    thread::spawn(move || -> eyre::Result<()> { handle_input(tx) });
 
     let mut terminal = ratatui::init();
     let result = App::new().run(&mut terminal, rx);
 
     ratatui::restore();
     result
-
-    // not waiting on event_thread, just dropping and stopping it
 }
 
-fn handle_input(tx: mpsc::Sender<AppEvent>) -> io::Result<()> {
+fn handle_input(tx: mpsc::Sender<AppEvent>) -> eyre::Result<()> {
     loop {
-        let app_event: Option<AppEvent> = match event::read()? {
-            Event::Resize(_, _) => Some(AppEvent::Resize),
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                match key_event.code {
-                    KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
-                        Some(AppEvent::Quit)
-                    }
-                    KeyCode::Char(ch) => Some(AppEvent::Key(ch)),
-                    KeyCode::Enter => Some(AppEvent::Accept),
-                    KeyCode::Esc => Some(AppEvent::Cancel),
-                    KeyCode::Up => Some(AppEvent::Up),
-                    KeyCode::Down => Some(AppEvent::Down),
-                    KeyCode::Right => Some(AppEvent::Rigth),
-                    KeyCode::Left => Some(AppEvent::Left),
-
-                    _ => None,
-                }
-            }
-            _ => None,
+        let event = event::read()?;
+        if let Event::Key(KeyEvent {
+            code: KeyCode::Char('c' | 'C'),
+            modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
+            ..
+        }) = event
+        {
+            // Ctrl + C
+            tx.send(AppEvent::Quit)?;
         };
 
-        if let Some(app_event) = app_event {
-            if tx.send(app_event).is_err() {
-                break;
-            }
-        }
+        tx.send(AppEvent::TermEvent(event))?;
     }
-    Ok(())
 }

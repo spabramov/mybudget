@@ -2,6 +2,7 @@ use std::sync::mpsc;
 
 use chrono::{Local, TimeZone};
 use color_eyre::eyre;
+use crossterm::event::{Event, KeyCode};
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::widgets::{Block, Clear, Widget};
 
@@ -67,34 +68,35 @@ impl App {
     fn handle_events(&mut self, rx: &Input) -> Result<(), mpsc::RecvError> {
         match rx.recv()? {
             AppEvent::Quit => self.exit(),
-            AppEvent::Resize => { /* redraw */ }
-            app_event => self.handle_event(app_event),
+            AppEvent::TermEvent(term_event) => self.handle_event(term_event),
         }
         Ok(())
     }
 
-    fn handle_event(&mut self, app_event: AppEvent) {
-        if self.state == AppState::Quitting {
-            match app_event {
-                AppEvent::Key('y' | 'Y') | AppEvent::Accept => self.state = AppState::Exited,
-                AppEvent::Key('n' | 'N') | AppEvent::Cancel => self.state = AppState::Running,
-                _ => {}
-            }
-        } else {
-            let consumed = match self.screen {
-                AppScreen::Accounts => self.s_transactions.handle_event(&app_event),
-            };
-
-            if !consumed {
-                match app_event {
-                    AppEvent::Key('q') => self.exit(), // default key handling
-                    AppEvent::Key('g' | 'G') => {
-                        self.service
-                            .put_trns(&gen_fake_trancations(5))
-                            .expect("failed to insert fake data");
-                        self.s_transactions.sync(&mut self.service);
-                    }
+    fn handle_event(&mut self, term_event: Event) {
+        if let Event::Key(key_event) = term_event {
+            if self.state == AppState::Quitting {
+                match key_event.code {
+                    KeyCode::Char('y' | 'Y') | KeyCode::Enter => self.state = AppState::Exited,
+                    KeyCode::Char('n' | 'N') | KeyCode::Esc => self.state = AppState::Running,
                     _ => {}
+                }
+            } else {
+                let consumed = match self.screen {
+                    AppScreen::Accounts => self.s_transactions.handle_event(&term_event),
+                };
+
+                if !consumed {
+                    match key_event.code {
+                        KeyCode::Char('q') => self.exit(), // default key handling
+                        KeyCode::Char('g' | 'G') => {
+                            self.service
+                                .put_trns(&gen_fake_trancations(5))
+                                .expect("failed to insert fake data");
+                            self.s_transactions.sync(&mut self.service);
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
