@@ -3,48 +3,44 @@ use std::thread;
 
 use chrono::{Local, TimeZone};
 use color_eyre::eyre;
-use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Style};
-use ratatui::text::Text;
+use ratatui::text::Line;
 use ratatui::widgets::Widget;
 
 use crate::screens::account::AccountScreen;
+use crate::screens::notifications::NotificationsScreen;
 use crate::screens::{NavEvent, Screen};
 use crate::service::BudgetService;
-use crate::types::{AppEvent, Transaction};
+use crate::types::{AppEvent, ScreenEnum, Transaction};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 enum AppState {
-    Exited,
+    #[default]
     Running,
+    Exited,
 }
 
 pub struct App {
     state: AppState,
-    screen: Box<dyn Screen>,
+    screens: Vec<(ScreenEnum, Box<dyn Screen>)>,
     frames_count: u32,
-    service: BudgetService,
     notifications: Vec<String>,
-    events: mpsc::Receiver<AppEvent>,
+    events: (mpsc::Sender<AppEvent>, mpsc::Receiver<AppEvent>),
 }
 
 impl App {
-    pub fn new() -> eyre::Result<Self> {
-        let mut service = BudgetService::new("budget.db")?;
+    pub fn new() -> Self {
         let (tx, rx) = mpsc::channel();
-        let mut s_transactions = AccountScreen::new(tx);
-        s_transactions.sync(&mut service)?;
 
-        Ok(Self {
-            state: AppState::Running,
-            screen: Box::from(s_transactions),
+        Self {
+            state: AppState::default(),
+            screens: vec![],
             frames_count: 0,
-            service,
             notifications: vec![],
-            events: rx,
-        })
+            events: (tx, rx),
+        }
     }
     pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> eyre::Result<()> {
         let (tx, rx) = mpsc::channel();
@@ -52,17 +48,20 @@ impl App {
         // read terminal events in separate thread
         thread::spawn(move || {
             while let Ok(event) = event::read() {
-                let send_result = tx.send(event);
-                if send_result.is_err() {
+                if tx.send(event).is_err() {
                     break;
                 }
             }
         });
 
+        self.load_screen(ScreenEnum::default())?;
+
         while self.state != AppState::Exited {
             self.frames_count += 1;
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events(&rx)?;
+            if let Err(report) = self.handle_events(&rx) {
+                self.notify(format!("{report}"))
+            }
         }
         Ok(())
     }
@@ -71,54 +70,102 @@ impl App {
         self.state = AppState::Exited;
     }
 
+    fn load_screen(&mut self, kind: ScreenEnum) -> eyre::Result<()> {
+        if Some(&kind) == self.screens.last().map(|(kind, _)| kind) {
+            // the same screen type
+            return Ok(());
+        }
+        let mut screen: Box<dyn Screen> = match kind {
+            ScreenEnum::Account => {
+                let service = BudgetService::new("budget.db")?;
+                Box::from(AccountScreen::new(self.events.0.clone(), service))
+            }
+            ScreenEnum::Notifications => Box::from(NotificationsScreen::new(
+                self.events.0.clone(),
+                self.notifications.clone(),
+            )),
+        };
+        screen.sync()?;
+        self.screens.push((kind, screen));
+        Ok(())
+    }
+
     fn draw(&mut self, frame: &mut ratatui::Frame) {
         let layout =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).split(frame.area());
 
-        self.screen.render(layout[0], frame.buffer_mut());
+        for (_, screen) in &mut self.screens {
+            screen.render(layout[0], frame.buffer_mut());
+        }
 
         if let Some(text) = self.notifications.last() {
-            Text::from(text.as_str())
+            Line::from(text.as_str())
                 .style(Style::default().fg(Color::Red))
                 .render(layout[1], frame.buffer_mut());
         }
     }
 
-    fn handle_events(&mut self, rx: &mpsc::Receiver<Event>) -> Result<(), mpsc::RecvError> {
+    fn handle_events(&mut self, rx: &mpsc::Receiver<Event>) -> eyre::Result<()> {
         let event = rx.recv()?;
-        if let Event::Key(key_event) = event {
-            if let KeyEventKind::Press = key_event.kind {
-                match key_event.code {
-                    KeyCode::Char('q') => self.exit(), // default key handling
-                    KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
-                        self.exit()
+
+        if let Some((_, ref mut screen)) = self.screens.last_mut() {
+            screen.handle_event(&event)?;
+
+            if let Event::Key(key_event) = event {
+                if let KeyEventKind::Press = key_event.kind {
+                    // Global key handler
+                    match key_event.code {
+                        KeyCode::Char('c' | 'C')
+                            if key_event.modifiers == KeyModifiers::CONTROL =>
+                        {
+                            self.exit()
+                        }
+                        KeyCode::Char('j' | 'J') | KeyCode::Down => {
+                            screen.handle_nav(NavEvent::Down)?
+                        }
+                        KeyCode::Char('k' | 'K') | KeyCode::Up => {
+                            screen.handle_nav(NavEvent::Up)?
+                        }
+                        KeyCode::Char('l') | KeyCode::Right => {
+                            screen.handle_nav(NavEvent::Rigth)?
+                        }
+                        KeyCode::Char('h' | 'H') | KeyCode::Left => {
+                            screen.handle_nav(NavEvent::Left)?
+                        }
+                        KeyCode::Enter => screen.handle_nav(NavEvent::Interact)?,
+                        KeyCode::Esc => screen.handle_nav(NavEvent::Cancel)?,
+                        KeyCode::Char('n' | 'N') => self.load_screen(ScreenEnum::Notifications)?,
+
+                        KeyCode::Char('g' | 'G') => {
+                            self.notifications
+                                .push(String::from("Generating 5 fake transactions"));
+                            BudgetService::new("budget.db")?.put_trns(&gen_fake_trancations(5))?;
+                            screen.sync()?;
+                        }
+                        _ => {}
                     }
-                    KeyCode::Char('j') | KeyCode::Down => self.screen.handle_nav(NavEvent::Down),
-                    KeyCode::Char('k') | KeyCode::Up => self.screen.handle_nav(NavEvent::Up),
-                    KeyCode::Char('l') | KeyCode::Right => self.screen.handle_nav(NavEvent::Rigth),
-                    KeyCode::Char('h') | KeyCode::Left => self.screen.handle_nav(NavEvent::Left),
-                    KeyCode::Enter => self.screen.handle_nav(NavEvent::Interact),
-                    KeyCode::Esc => self.screen.handle_nav(NavEvent::Cancel),
-                    KeyCode::Char('g' | 'G') => {
-                        self.service
-                            .put_trns(&gen_fake_trancations(5))
-                            .expect("failed to insert fake data");
-                        self.screen
-                            .sync(&mut self.service)
-                            .expect("Failed to sync data");
-                    }
-                    _ => {}
                 }
             }
         };
 
-        self.screen.handle_event(&event);
-
-        while let Ok(app_event) = self.events.try_recv() {
-            let AppEvent::Notifiction(text) = app_event;
-            self.notifications.push(text);
+        while let Ok(app_event) = self.events.1.try_recv() {
+            match app_event {
+                AppEvent::Notifiction(text) => self.notifications.push(text),
+                AppEvent::ExitScreen => {
+                    if !self.screens.is_empty() {
+                        self.screens.pop();
+                    }
+                    if self.screens.is_empty() {
+                        self.state = AppState::Exited;
+                    }
+                }
+            }
         }
         Ok(())
+    }
+
+    fn notify(&mut self, msg: String) {
+        self.notifications.push(msg);
     }
 }
 

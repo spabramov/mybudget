@@ -1,6 +1,7 @@
-use crate::service::BudgetService;
+use color_eyre::eyre;
 
 pub mod account;
+pub mod notifications;
 
 pub enum NavEvent {
     Left,
@@ -12,7 +13,12 @@ pub enum NavEvent {
 }
 pub trait Screen {
     fn render(&mut self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer);
-    fn handle_nav(&mut self, event: NavEvent);
-    fn handle_event(&mut self, event: &crossterm::event::Event);
-    fn sync(&mut self, service: &mut BudgetService) -> color_eyre::eyre::Result<()>;
+    fn handle_nav(&mut self, event: NavEvent) -> eyre::Result<()>;
+    fn handle_event(&mut self, _event: &crossterm::event::Event) -> eyre::Result<()> {
+        Ok(())
+    }
+
+    fn sync(&mut self) -> color_eyre::eyre::Result<()> {
+        Ok(())
+    }
 }
