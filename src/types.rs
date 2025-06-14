@@ -1,8 +1,15 @@
 use chrono::{DateTime, Local};
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum ScreenMode {
+    #[default]
+    Browsing,
+    Editing,
+}
+
+#[derive(Debug)]
 pub enum AppEvent {
-    Quit,
-    TermEvent(crossterm::event::Event),
+    Notifiction(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -16,16 +23,16 @@ pub struct Transaction {
     pub description: Option<String>,
 }
 
-impl Transaction {
-    pub fn new(timestamp: DateTime<Local>, amount: i64) -> Self {
-        Self {
-            transaction_id: None,
-            credit_acc_id: None,
-            debit_acc_id: None,
-            timestamp,
-            category: None,
-            amount,
-            description: None,
-        }
-    }
-}
+// impl Transaction {
+//     pub fn new(timestamp: DateTime<Local>, amount: i64) -> Self {
+//         Self {
+//             transaction_id: None,
+//             credit_acc_id: None,
+//             debit_acc_id: None,
+//             timestamp,
+//             category: None,
+//             amount,
+//             description: None,
+//         }
+//     }
+// }

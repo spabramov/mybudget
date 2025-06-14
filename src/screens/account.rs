@@ -1,28 +1,30 @@
+use std::sync::mpsc;
+
 use color_eyre::eyre;
-use crossterm::event::{Event, KeyCode};
+use crossterm::event::{Event, KeyCode, KeyEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::widgets::StatefulWidget;
 
 use crate::service::BudgetService;
-use crate::types::Transaction;
+use crate::types::{AppEvent, ScreenMode, Transaction};
 use crate::widgets::transactions::{TransactionsTable, TransactionsTableState};
 
-use super::Screen;
+use super::{NavEvent, Screen};
 
 #[derive(Debug)]
 pub struct AccountScreen {
-    table_state: TransactionsTableState,
     items: Vec<Transaction>,
+    table_state: TransactionsTableState,
+    events: mpsc::Sender<AppEvent>,
 }
 
 impl AccountScreen {
-    pub fn new() -> Self {
-        let table_state = TransactionsTableState::new(0);
-
+    pub fn new(tx: mpsc::Sender<AppEvent>) -> Self {
         Self {
-            table_state,
-            items: vec![],
+            items: Vec::default(),
+            table_state: TransactionsTableState::default(),
+            events: tx,
         }
     }
 }
@@ -32,18 +34,37 @@ impl Screen for AccountScreen {
         TransactionsTable::new(&self.items).render(area, buf, &mut self.table_state);
     }
 
-    fn handle_event(&mut self, term_event: &Event) -> bool {
-        if let Event::Key(key_event) = term_event {
-            match key_event.code {
-                KeyCode::Char('j') | KeyCode::Down => self.table_state.next_row(),
-                KeyCode::Char('k') | KeyCode::Up => self.table_state.previous_row(),
-                KeyCode::Char('l') | KeyCode::Right => self.table_state.next_column(),
-                KeyCode::Char('h') | KeyCode::Left => self.table_state.previous_column(),
-                KeyCode::Esc => self.table_state.deselect(),
-                _ => return false,
+    fn handle_nav(&mut self, event: NavEvent) {
+        match self.table_state.mode {
+            ScreenMode::Browsing => match event {
+                NavEvent::Left => self.table_state.previous_column(),
+                NavEvent::Rigth => self.table_state.next_column(),
+                NavEvent::Up => self.table_state.previous_row(),
+                NavEvent::Down => self.table_state.next_row(),
+                NavEvent::Cancel => self.table_state.deselect(),
+                NavEvent::Interact => self.table_state.start_editing(),
+            },
+            ScreenMode::Editing => match event {
+                NavEvent::Cancel => self.table_state.cancel_edit(),
+                NavEvent::Interact => self.table_state.accept_edit(),
+                _ => {
+                    // suppress navigation in Edit Mode
+                }
+            },
+        }
+    }
+
+    fn handle_event(&mut self, term_event: &Event) {
+        if let ScreenMode::Editing = self.table_state.mode {
+            self.table_state.handle_input(term_event);
+        } else if let Event::Key(key_event) = term_event {
+            if let KeyEventKind::Press = key_event.kind {
+                match key_event.code {
+                    KeyCode::Char('d' | 'D') => self.delete_selected_trns(),
+                    _ => {}
+                }
             }
         }
-        true
     }
 
     fn sync(&mut self, service: &mut BudgetService) -> eyre::Result<()> {
@@ -51,7 +72,20 @@ impl Screen for AccountScreen {
 
         let selected = self.table_state.selected();
         self.table_state = TransactionsTableState::new(self.items.len());
-        self.table_state.select(selected);
+        self.table_state.select(selected.0, selected.1);
         Ok(())
+    }
+}
+
+impl AccountScreen {
+    pub fn delete_selected_trns(&mut self) {
+        if let (Some(row), _) = self.table_state.selected() {
+            self.items.remove(row);
+            self.events
+                .send(AppEvent::Notifiction(format!(
+                    "Deleting transaction {row:?}"
+                )))
+                .expect("Failed to send AppEvent back to App")
+        }
     }
 }

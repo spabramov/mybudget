@@ -1,81 +1,104 @@
 use std::sync::mpsc;
+use std::thread;
 
 use chrono::{Local, TimeZone};
 use color_eyre::eyre;
-use crossterm::event::{Event, KeyCode};
-use ratatui::layout::{Constraint, Flex, Layout, Rect};
-use ratatui::widgets::{Block, Clear, Widget};
+use color_eyre::owo_colors::OwoColorize;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::layout::{Constraint, Layout};
+use ratatui::style::{Color, Style};
+use ratatui::text::Text;
+use ratatui::widgets::Widget;
 
 use crate::screens::account::AccountScreen;
-use crate::screens::Screen;
+use crate::screens::{NavEvent, Screen};
 use crate::service::BudgetService;
 use crate::types::{AppEvent, Transaction};
-
-type Input = mpsc::Receiver<AppEvent>;
 
 #[derive(Debug, PartialEq)]
 enum AppState {
     Exited,
-    Quitting,
     Running,
 }
 
 pub struct App {
     state: AppState,
     screen: Box<dyn Screen>,
-    has_changes: bool,
     frames_count: u32,
     service: BudgetService,
+    notifications: Vec<String>,
+    events: mpsc::Receiver<AppEvent>,
 }
 
 impl App {
     pub fn new() -> eyre::Result<Self> {
         let mut service = BudgetService::new("budget.db")?;
-        let mut s_transactions = AccountScreen::new();
+        let (tx, rx) = mpsc::channel();
+        let mut s_transactions = AccountScreen::new(tx);
         s_transactions.sync(&mut service)?;
 
         Ok(Self {
             state: AppState::Running,
             screen: Box::from(s_transactions),
-            has_changes: false,
             frames_count: 0,
             service,
+            notifications: vec![],
+            events: rx,
         })
     }
-    pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal, rx: Input) -> eyre::Result<()> {
+    pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> eyre::Result<()> {
+        let (tx, rx) = mpsc::channel();
+
+        // read terminal events in separate thread
+        thread::spawn(move || {
+            while let Ok(event) = event::read() {
+                let send_result = tx.send(event);
+                if send_result.is_err() {
+                    break;
+                }
+            }
+        });
+
         while self.state != AppState::Exited {
             self.frames_count += 1;
-            terminal.draw(|frame| frame.render_widget(&mut *self, frame.area()))?;
+            terminal.draw(|frame| self.draw(frame))?;
             self.handle_events(&rx)?;
         }
         Ok(())
     }
 
     fn exit(&mut self) {
-        self.state = if self.has_changes {
-            AppState::Quitting
-        } else {
-            AppState::Exited
+        self.state = AppState::Exited;
+    }
+
+    fn draw(&mut self, frame: &mut ratatui::Frame) {
+        let layout =
+            Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).split(frame.area());
+
+        self.screen.render(layout[0], frame.buffer_mut());
+
+        if let Some(text) = self.notifications.last() {
+            Text::from(text.as_str())
+                .style(Style::default().fg(Color::Red))
+                .render(layout[1], frame.buffer_mut());
         }
     }
 
-    fn handle_events(&mut self, rx: &Input) -> Result<(), mpsc::RecvError> {
-        match rx.recv()? {
-            AppEvent::Quit => self.exit(),
-            AppEvent::TermEvent(term_event) => self.handle_event(term_event),
-        }
-        Ok(())
-    }
-
-    fn handle_event(&mut self, term_event: Event) {
-        if self.state == AppState::Quitting {
-            self.exit_popup(term_event);
-        } else if let Event::Key(key_event) = term_event {
-            let consumed = self.screen.handle_event(&term_event);
-
-            if !consumed {
+    fn handle_events(&mut self, rx: &mpsc::Receiver<Event>) -> Result<(), mpsc::RecvError> {
+        let event = rx.recv()?;
+        if let Event::Key(key_event) = event {
+            if let KeyEventKind::Press = key_event.kind {
                 match key_event.code {
                     KeyCode::Char('q') => self.exit(), // default key handling
+                    KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
+                        self.exit()
+                    }
+                    KeyCode::Char('j') | KeyCode::Down => self.screen.handle_nav(NavEvent::Down),
+                    KeyCode::Char('k') | KeyCode::Up => self.screen.handle_nav(NavEvent::Up),
+                    KeyCode::Char('l') | KeyCode::Right => self.screen.handle_nav(NavEvent::Rigth),
+                    KeyCode::Char('h') | KeyCode::Left => self.screen.handle_nav(NavEvent::Left),
+                    KeyCode::Enter => self.screen.handle_nav(NavEvent::Interact),
+                    KeyCode::Esc => self.screen.handle_nav(NavEvent::Cancel),
                     KeyCode::Char('g' | 'G') => {
                         self.service
                             .put_trns(&gen_fake_trancations(5))
@@ -87,43 +110,16 @@ impl App {
                     _ => {}
                 }
             }
+        };
+
+        self.screen.handle_event(&event);
+
+        while let Ok(app_event) = self.events.try_recv() {
+            let AppEvent::Notifiction(text) = app_event;
+            self.notifications.push(text);
         }
+        Ok(())
     }
-
-    fn exit_popup(&mut self, term_event: Event) {
-        if let Event::Key(key_event) = term_event {
-            match key_event.code {
-                KeyCode::Char('y' | 'Y') | KeyCode::Enter => self.state = AppState::Exited,
-                KeyCode::Char('n' | 'N') | KeyCode::Esc => self.state = AppState::Running,
-                _ => {}
-            }
-        }
-    }
-}
-
-impl Widget for &mut App {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-        self.screen.render(area, buf);
-
-        if self.state == AppState::Quitting {
-            let block = Block::bordered().title("Quit?").title_bottom("y / n");
-            let area = popup_area(area, 60, 20);
-
-            Clear.render(area, buf);
-            block.render(area, buf);
-        }
-    }
-}
-
-fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
-    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
-    let [area] = vertical.areas(area);
-    let [area] = horizontal.areas(area);
-    area
 }
 
 fn gen_fake_trancations(size: u32) -> Vec<Transaction> {
