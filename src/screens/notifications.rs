@@ -25,7 +25,7 @@ impl NotificationsScreen {
 }
 
 impl Screen for NotificationsScreen {
-    fn render(&mut self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+    fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         let area = area.inner(Margin::new(20, 3));
         let block = Block::default()
             .padding(Padding::new(1, 1, 0, 0))
@@ -47,7 +47,7 @@ impl Screen for NotificationsScreen {
         list.render(area, buf);
     }
 
-    fn handle_nav(&mut self, event: super::NavEvent) -> eyre::Result<()> {
+    fn handle_nav(&self, event: super::NavEvent) -> eyre::Result<()> {
         if let super::NavEvent::Cancel = event {
             self.events.send(AppEvent::ExitScreen)?
         }

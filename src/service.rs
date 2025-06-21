@@ -223,7 +223,7 @@ mod test {
 
         let _ = service.del_trns(&[trn1.transaction_id.unwrap()]);
 
-        assert_eq!(service.get_trns(), Ok(vec![trn2]));
+        assert_eq!(service.get_trns()?, vec![trn2]);
         Ok(())
     }
 }

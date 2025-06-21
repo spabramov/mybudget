@@ -12,8 +12,8 @@ pub enum NavEvent {
     Interact,
 }
 pub trait Screen {
-    fn render(&mut self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer);
-    fn handle_nav(&mut self, event: NavEvent) -> eyre::Result<()>;
+    fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer);
+    fn handle_nav(&self, event: NavEvent) -> eyre::Result<()>;
     fn handle_event(&mut self, _event: &crossterm::event::Event) -> eyre::Result<()> {
         Ok(())
     }
