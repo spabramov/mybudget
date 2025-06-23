@@ -2,7 +2,6 @@ use app::App;
 use color_eyre::eyre;
 
 mod app;
-mod screens;
 mod service;
 mod types;
 mod widgets;

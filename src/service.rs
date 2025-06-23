@@ -1,29 +1,24 @@
 use crate::types::Transaction;
-use color_eyre::eyre::Result;
-use rusqlite::{params, Connection};
+use color_eyre::eyre::{eyre, Result};
+use rusqlite::{params, CachedStatement, Connection};
+
+use std::cell;
+
+type LazyCell<T> = cell::LazyCell<T, Box<dyn FnOnce() -> T>>;
 
 pub struct BudgetService {
-    connection: Connection,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum DBError {
-    SQLError(rusqlite::Error),
-}
-
-impl From<rusqlite::Error> for DBError {
-    fn from(value: rusqlite::Error) -> Self {
-        DBError::SQLError(value)
-    }
+    connection: LazyCell<Result<Connection>>,
 }
 
 impl BudgetService {
-    pub fn new(name: &str) -> Result<Self> {
-        let connection = Connection::open(name)?;
-
-        let _ = Self::create_db(&connection)?;
-
-        Ok(Self { connection })
+    pub fn new(name: &str) -> Self {
+        let name = name.to_string();
+        let connection = LazyCell::new(Box::new(|| -> Result<Connection> {
+            let conn = Connection::open(name)?;
+            let _ = Self::create_db(&conn)?;
+            Ok(conn)
+        }));
+        Self { connection }
     }
 
     fn create_db(conn: &Connection) -> Result<usize> {
@@ -41,8 +36,15 @@ impl BudgetService {
         )?)
     }
 
+    fn statement(&self, sql: &str) -> Result<CachedStatement> {
+        match self.connection.as_ref() {
+            Ok(conn) => Ok(conn.prepare_cached(sql)?),
+            Err(err) => Err(eyre!("failed to connect: {err}")),
+        }
+    }
+
     pub fn get_trns(&self) -> Result<Vec<Transaction>> {
-        let mut stmt = self.connection.prepare_cached(
+        let mut stmt = self.statement(
             "SELECT 
                 transaction_id, timestamp, credit_acc_id, debit_acc_id,
                 amount, category, description
@@ -64,9 +66,7 @@ impl BudgetService {
         Ok(tr_iter.collect::<Result<Vec<Transaction>, rusqlite::Error>>()?)
     }
     pub fn del_trns(&mut self, items: &[isize]) -> Result<()> {
-        let mut delete = self
-            .connection
-            .prepare_cached("DELETE FROM fin_transaction WHERE transaction_id = ?1")?;
+        let mut delete = self.statement("DELETE FROM fin_transaction WHERE transaction_id = ?1")?;
 
         for id in items {
             let _ = delete.execute(params![id])?;
@@ -77,7 +77,7 @@ impl BudgetService {
     pub fn put_trn(&mut self, item: &Transaction) -> Result<isize> {
         let trn_id = match item.transaction_id {
             Some(transaction_id) => {
-                let mut update = self.connection.prepare_cached(
+                let mut update = self.statement(
                     "UPDATE fin_transaction 
                      SET 
                         timestamp     = ?2,
@@ -103,7 +103,7 @@ impl BudgetService {
                 transaction_id
             }
             None => {
-                let mut insert = self.connection.prepare_cached(
+                let mut insert = self.statement(
                     "INSERT INTO fin_transaction (
                        timestamp, credit_acc_id, debit_acc_id,
                        amount, category, description
@@ -177,7 +177,7 @@ mod test {
 
     #[test]
     fn create_service() -> Result<()> {
-        let service = BudgetService::new(TEST_DB)?;
+        let service = BudgetService::new(TEST_DB);
         let trans = service.get_trns()?;
 
         assert_eq!(trans, vec![]);
@@ -187,7 +187,7 @@ mod test {
     #[test]
     fn insert_transactions() -> Result<()> {
         let fake_data = fake_data();
-        let mut service = BudgetService::new(TEST_DB)?;
+        let mut service = BudgetService::new(TEST_DB);
         if let Err(err) = service.put_trns(&fake_data) {
             println!("{err:?}");
         }
@@ -197,7 +197,7 @@ mod test {
 
     #[test]
     fn update_transaction() -> Result<()> {
-        let mut service = BudgetService::new(TEST_DB)?;
+        let mut service = BudgetService::new(TEST_DB);
         let mut trn = random_trn();
 
         trn.transaction_id = Some(service.put_trn(&trn)?);
@@ -210,7 +210,7 @@ mod test {
 
     #[test]
     fn delete_transactions() -> Result<()> {
-        let mut service = BudgetService::new(TEST_DB)?;
+        let mut service = BudgetService::new(TEST_DB);
         let mut trn1 = random_trn();
         let mut trn2 = random_trn();
 

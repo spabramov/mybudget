@@ -1,4 +1,4 @@
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyEvent};
 use ratatui::{
     style::palette::tailwind,
     widgets::{Block, Borders, ScrollbarState, StatefulWidget, TableState},
@@ -6,7 +6,7 @@ use ratatui::{
 use tui_input::backend::crossterm::EventHandler;
 
 use super::utils;
-use crate::types::{ScreenMode, Transaction};
+use crate::types::{NavEvent, ScreenMode, Transaction};
 use ratatui::{
     prelude::*,
     widgets::{HighlightSpacing, Row, Scrollbar, ScrollbarOrientation, Table},
@@ -163,18 +163,6 @@ impl TransactionsTableState {
         }
     }
 
-    pub fn accept_edit(&mut self) {
-        if let (Some(_row), Some(_col)) = self.selected() {
-            let _value = self.input.value_and_reset();
-        }
-        self.mode = ScreenMode::Browsing;
-    }
-
-    pub fn cancel_edit(&mut self) {
-        self.input.reset();
-        self.mode = ScreenMode::Browsing;
-    }
-
     pub fn select(&mut self, row: Option<usize>, column: Option<usize>) {
         self.table_state.select(row);
         self.table_state.select_column(column);
@@ -187,11 +175,7 @@ impl TransactionsTableState {
         )
     }
 
-    pub fn deselect(&mut self) {
-        self.table_state.select_column(None);
-    }
-
-    pub fn next_row(&mut self) {
+    fn next_row(&mut self) {
         let i = match self.table_state.selected() {
             Some(i) if i < self.size => i + 1,
             _ => 0,
@@ -200,7 +184,7 @@ impl TransactionsTableState {
         self.scroll_state = self.scroll_state.position(i);
     }
 
-    pub fn previous_row(&mut self) {
+    fn previous_row(&mut self) {
         let i = match self.table_state.selected() {
             Some(i) if i > 0 => i - 1,
             _ => 0,
@@ -209,16 +193,43 @@ impl TransactionsTableState {
         self.scroll_state = self.scroll_state.position(i);
     }
 
-    pub fn next_column(&mut self) {
-        self.table_state.select_next_column();
+    pub fn handle_input(&mut self, event: &KeyEvent) {
+        if self.mode == ScreenMode::Editing {
+            self.input.handle_event(&Event::Key(*event));
+        }
     }
 
-    pub fn previous_column(&mut self) {
-        self.table_state.select_previous_column();
-    }
-
-    pub fn handle_input(&mut self, event: &Event) {
-        self.input.handle_event(event);
+    pub fn navigate(&mut self, event: NavEvent) -> Option<String> {
+        match self.mode {
+            ScreenMode::Browsing => match event {
+                NavEvent::Left => self.table_state.select_previous_column(),
+                NavEvent::Rigth => self.table_state.select_next_column(),
+                NavEvent::Up => self.previous_row(),
+                NavEvent::Down => self.next_row(),
+                NavEvent::Cancel => self.table_state.select_column(None),
+                NavEvent::Interact => {
+                    // start editing
+                    if let (Some(_), Some(_)) = self.selected() {
+                        self.mode = ScreenMode::Editing
+                    }
+                }
+            },
+            ScreenMode::Editing => match event {
+                NavEvent::Cancel => {
+                    self.input.reset();
+                    self.mode = ScreenMode::Browsing;
+                }
+                NavEvent::Interact => {
+                    // accept edit
+                    self.mode = ScreenMode::Browsing;
+                    if let (Some(_row), Some(_col)) = self.selected() {
+                        return Some(self.input.value_and_reset());
+                    }
+                }
+                _ => { /* suppress navigation in Edit Mode */ }
+            },
+        }
+        None
     }
 }
 

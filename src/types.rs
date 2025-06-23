@@ -7,16 +7,19 @@ pub enum ScreenMode {
     Editing,
 }
 
-#[derive(Default, PartialEq)]
-pub enum ScreenEnum {
-    #[default]
-    Account,
-    Notifications,
-}
 #[derive(Debug)]
 pub enum AppEvent {
     Notifiction(String),
-    ExitScreen,
+}
+
+#[derive(Debug)]
+pub enum NavEvent {
+    Left,
+    Rigth,
+    Up,
+    Down,
+    Cancel,
+    Interact,
 }
 
 #[derive(Debug, PartialEq)]
